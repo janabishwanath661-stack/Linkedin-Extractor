@@ -30,17 +30,15 @@ async def capture_profile_sections(page: Page, profile_url: str) -> list[str]:
     profile_slug = _extract_slug(profile_url)
     logger.info("Capturing sections for profile: {}", profile_slug)
 
-    # Block web fonts to prevent 'waiting for fonts to load' screenshot timeouts
-    async def abort_fonts(route):
-        if route.request.resource_type == "font":
-            await route.abort()
-        else:
-            await route.continue_()
-            
-    try:
-        await page.route("**/*", abort_fonts)
-    except Exception:
-        pass  # Route might already be set
+    # CRITICAL FIX for Playwright Timeout (waiting for fonts to load)
+    # Playwright's screenshot engine unconditionally awaits `document.fonts.ready`
+    # and hangs if LinkedIn's anti-bot/tracking blocks font loading. 
+    # We mock it to instantly resolve.
+    await page.add_init_script("""
+        Object.defineProperty(document.fonts, 'ready', {
+            get: () => Promise.resolve([])
+        });
+    """)
 
     await page.goto(profile_url, wait_until="domcontentloaded")
 
