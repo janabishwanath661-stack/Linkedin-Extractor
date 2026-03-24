@@ -168,6 +168,8 @@ async def list_profiles():
 async def _run_pipeline(job_id: str, query: str):
     """Execute the full extraction pipeline, posting progress updates."""
     job = _jobs[job_id]
+    pw = None
+    browser = None
 
     def progress(message: str, step: str = "info"):
         job["progress"].append({"type": "progress", "step": step, "message": message})
@@ -181,7 +183,7 @@ async def _run_pipeline(job_id: str, query: str):
 
         # ── Browser Launch ─────────────────────────────────────────────
         progress("Launching browser...", "browser")
-        pw = await async_playwright().__aenter__()
+        pw = await async_playwright().start()
         browser = await pw.chromium.launch(headless=config.HEADLESS)
 
         # Session handling
@@ -209,16 +211,10 @@ async def _run_pipeline(job_id: str, query: str):
             except CaptchaError:
                 progress("CAPTCHA detected — cannot proceed automatically", "error")
                 job["error"] = "LinkedIn CAPTCHA detected. Please solve it manually or try again later."
-                job["done"] = True
-                await browser.close()
-                await pw.__aexit__(None, None, None)
                 return
             except Exception as exc:
                 progress(f"Login failed: {exc}", "error")
                 job["error"] = f"Login failed: {exc}"
-                job["done"] = True
-                await browser.close()
-                await pw.__aexit__(None, None, None)
                 return
 
         if page is None:
@@ -236,9 +232,6 @@ async def _run_pipeline(job_id: str, query: str):
             except ProfileNotFoundError:
                 progress(f"No profile found for '{query}'", "error")
                 job["error"] = f"No LinkedIn profile found for '{query}'."
-                job["done"] = True
-                await browser.close()
-                await pw.__aexit__(None, None, None)
                 return
 
         # ── Capture Screenshots ───────────────────────────────────────
@@ -261,9 +254,6 @@ async def _run_pipeline(job_id: str, query: str):
         if not raw_ocr.strip():
             progress("OCR returned empty text", "error")
             job["error"] = "OCR failed — no text could be extracted."
-            job["done"] = True
-            await browser.close()
-            await pw.__aexit__(None, None, None)
             return
         progress(f"OCR complete — {len(raw_ocr)} characters extracted ✓", "ocr")
 
@@ -280,9 +270,6 @@ async def _run_pipeline(job_id: str, query: str):
         except LLMParseError:
             progress("LLM failed to return valid JSON after retries", "error")
             job["error"] = "LLM extraction failed after 3 attempts."
-            job["done"] = True
-            await browser.close()
-            await pw.__aexit__(None, None, None)
             return
 
         # ── Validate ──────────────────────────────────────────────────
@@ -292,7 +279,6 @@ async def _run_pipeline(job_id: str, query: str):
             progress("Validation passed ✓", "validate")
         except Exception as exc:
             progress(f"Validation error: {exc}", "error")
-            # Still return what we have
             profile = None
 
         # ── Save to DB ────────────────────────────────────────────────
@@ -308,15 +294,23 @@ async def _run_pipeline(job_id: str, query: str):
 
         progress("Extraction complete!", "done")
 
-        await browser.close()
-        await pw.__aexit__(None, None, None)
-
     except Exception as exc:
         logger.exception("Pipeline error: {}", exc)
         job["error"] = str(exc)
         job["progress"].append({"type": "progress", "step": "error", "message": str(exc)})
 
     finally:
+        # Always clean up browser and Playwright
+        try:
+            if browser:
+                await browser.close()
+        except Exception:
+            pass
+        try:
+            if pw:
+                await pw.stop()
+        except Exception:
+            pass
         job["done"] = True
 
 
