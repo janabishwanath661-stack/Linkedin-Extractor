@@ -30,30 +30,21 @@ async def capture_profile_sections(page: Page, profile_url: str) -> list[str]:
     profile_slug = _extract_slug(profile_url)
     logger.info("Capturing sections for profile: {}", profile_slug)
 
-    # CRITICAL FIX for Playwright Timeout (waiting for fonts to load)
-    # Playwright's screenshot engine unconditionally awaits `document.fonts.ready`
-    # and hangs if LinkedIn's anti-bot/tracking blocks font loading.
-    # add_init_script covers future navigations; the evaluate() below patches the
-    # already-live page context immediately after goto().
-    await page.add_init_script("""
-        Object.defineProperty(document.fonts, 'ready', {
-            get: () => Promise.resolve([])
-        });
-    """)
+    # CRITICAL FIX for Playwright screenshot timeout ("waiting for fonts to load")
+    # Playwright's screenshot internally calls document.fonts.ready via the CDP
+    # protocol — JS overrides (add_init_script / evaluate) don't intercept it.
+    # The only reliable fix is to abort font network requests at the route level.
+    # When fonts fail to fetch, document.fonts.ready resolves immediately.
+    async def _abort_fonts(route):
+        await route.abort()
+
+    await page.route("**/*.woff2", _abort_fonts)
+    await page.route("**/*.woff",  _abort_fonts)
+    await page.route("**/*.ttf",   _abort_fonts)
+    await page.route("**/*.otf",   _abort_fonts)
+    logger.debug("Font request interception active")
 
     await page.goto(profile_url, wait_until="domcontentloaded", timeout=60000)
-
-    # Patch font readiness on the currently loaded page so screenshots don't block
-    await page.evaluate("""
-        () => {
-            try {
-                Object.defineProperty(document.fonts, 'ready', {
-                    get: () => Promise.resolve([]),
-                    configurable: true
-                });
-            } catch(e) {}
-        }
-    """)
 
     # Wait for profile content to render
     try:
