@@ -1,40 +1,44 @@
 """
-capture/screenshot_engine.py — Scroll through LinkedIn profile sections and take screenshots.
+capture/screenshot_engine.py — Capture LinkedIn profile sections via full-page screenshot + PIL crop.
 """
 
+import io
 import re
 from pathlib import Path
 
 from loguru import logger
+from PIL import Image
 from playwright.async_api import Page
 
 from config import SCREENSHOT_DIR, SCROLL_SECTIONS
-from utils.rate_limiter import random_delay, human_scroll_delay
+from utils.rate_limiter import random_delay
+
+# Viewport height used when launching the browser (must match browser context settings)
+_VIEWPORT_HEIGHT = 900
 
 
 async def capture_profile_sections(page: Page, profile_url: str) -> list[str]:
     """
-    Navigate to a LinkedIn profile and capture sectional screenshots.
+    Navigate to a LinkedIn profile, take one full-page screenshot, then crop it
+    into named sections based on the SCROLL_SECTIONS scroll-y positions.
 
     Args:
         page: Authenticated Playwright Page.
         profile_url: Full LinkedIn profile URL (e.g. https://www.linkedin.com/in/username/).
 
     Returns:
-        List of file paths to saved PNG screenshots.
+        List of file paths to saved PNG section screenshots.
     """
-    # Ensure screenshots directory exists
     screenshot_dir = Path(SCREENSHOT_DIR)
     screenshot_dir.mkdir(parents=True, exist_ok=True)
 
     profile_slug = _extract_slug(profile_url)
     logger.info("Capturing sections for profile: {}", profile_slug)
 
-    # CRITICAL FIX for Playwright screenshot timeout ("waiting for fonts to load")
-    # Playwright's screenshot internally calls document.fonts.ready via the CDP
-    # protocol — JS overrides (add_init_script / evaluate) don't intercept it.
-    # The only reliable fix is to abort font network requests at the route level.
-    # When fonts fail to fetch, document.fonts.ready resolves immediately.
+    # ── Font interception ─────────────────────────────────────────────────────
+    # Playwright's screenshot internally awaits document.fonts.ready via CDP —
+    # JS overrides don't intercept it. Aborting font network requests forces
+    # document.fonts.ready to resolve immediately.
     async def _abort_fonts(route):
         await route.abort()
 
@@ -44,6 +48,7 @@ async def capture_profile_sections(page: Page, profile_url: str) -> list[str]:
     await page.route("**/*.otf",   _abort_fonts)
     logger.debug("Font request interception active")
 
+    # ── Navigate ──────────────────────────────────────────────────────────────
     await page.goto(profile_url, wait_until="domcontentloaded", timeout=60000)
 
     # Wait for profile content to render
@@ -54,22 +59,48 @@ async def capture_profile_sections(page: Page, profile_url: str) -> list[str]:
 
     await random_delay()
 
+    # ── Lazy-load: scroll to bottom then back to top ──────────────────────────
+    # This triggers lazy-loaded sections so they appear in the full-page shot.
+    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    await page.wait_for_timeout(2000)
+    await page.evaluate("window.scrollTo(0, 0)")
+    await page.wait_for_timeout(1000)
+
+    # ── Full-page screenshot → bytes ──────────────────────────────────────────
+    logger.debug("Taking full-page screenshot")
+    full_bytes = await page.screenshot(full_page=True, timeout=60000)
+    full_image = Image.open(io.BytesIO(full_bytes))
+    img_width, img_height = full_image.size
+    logger.info("Full-page screenshot: {}x{} px", img_width, img_height)
+
+    # ── Crop into sections ────────────────────────────────────────────────────
+    # Each section is a viewport-height-tall crop starting at its scroll_y offset.
     screenshot_paths: list[str] = []
 
-    for section in SCROLL_SECTIONS:
-        name = section["name"]
-        scroll_y = section["scroll_y"]
+    for i, section in enumerate(SCROLL_SECTIONS):
+        name    = section["name"]
+        top     = section["scroll_y"]
+        # Bottom is the next section's top, or end of image for the last section
+        if i + 1 < len(SCROLL_SECTIONS):
+            bottom = SCROLL_SECTIONS[i + 1]["scroll_y"]
+        else:
+            bottom = img_height
 
-        logger.debug("Scrolling to section '{}' (y={})", name, scroll_y)
-        await page.evaluate(f"window.scrollTo(0, {scroll_y})")
-        await page.wait_for_timeout(1800)  # Let lazy-loaded content settle
+        # Clamp to actual image bounds
+        top    = min(top, img_height)
+        bottom = min(bottom, img_height)
+
+        if top >= bottom:
+            logger.warning("Section '{}' is out of page bounds — skipping", name)
+            continue
+
+        crop_box = (0, top, img_width, bottom)
+        section_img = full_image.crop(crop_box)
 
         file_path = str(screenshot_dir / f"{profile_slug}_{name}.png")
-        await page.screenshot(path=file_path, full_page=False, timeout=60000)
+        section_img.save(file_path, format="PNG")
         screenshot_paths.append(file_path)
-        logger.info("Screenshot saved: {}", file_path)
-
-        await human_scroll_delay()
+        logger.info("Section '{}' saved: {} (y={}-{})", name, file_path, top, bottom)
 
     logger.success("Captured {} section screenshots", len(screenshot_paths))
     return screenshot_paths

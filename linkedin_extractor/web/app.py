@@ -206,7 +206,10 @@ async def _run_pipeline(job_id: str, query: str):
 
         if use_saved:
             progress("Loading saved session...", "auth")
-            context = await browser.new_context(storage_state=str(cookies_path))
+            context = await browser.new_context(
+                storage_state=str(cookies_path),
+                viewport={"width": 1280, "height": 900},
+            )
             session_valid = await SessionManager.load_session(context)
             if not session_valid:
                 progress("Saved session expired — logging in fresh...", "auth")
