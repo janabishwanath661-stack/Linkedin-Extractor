@@ -3,6 +3,7 @@ auth/session_manager.py — LinkedIn login and cookie-based session persistence.
 """
 
 import json
+import time
 from pathlib import Path
 
 from loguru import logger
@@ -57,9 +58,9 @@ class SessionManager:
 
         # Wait for navigation to complete
         try:
-            await page.wait_for_load_state("networkidle", timeout=15000)
+            await page.wait_for_load_state("networkidle", timeout=25000)
         except Exception:
-            await page.wait_for_load_state("domcontentloaded", timeout=10000)
+            await page.wait_for_load_state("domcontentloaded", timeout=15000)
 
         current_url = page.url
 
@@ -101,10 +102,32 @@ class SessionManager:
             logger.info("No saved cookies found at {}", COOKIES_PATH)
             return False
 
+        # Fast pre-check: inspect cookie expiry before opening a browser page
+        try:
+            with open(COOKIES_PATH, encoding="utf-8") as f:
+                storage = json.load(f)
+            now = time.time()
+            li_at_cookies = [
+                c for c in storage.get("cookies", [])
+                if c.get("name") == "li_at"
+            ]
+            if not li_at_cookies:
+                logger.warning("No li_at auth cookie found — session invalid")
+                return False
+            # Check if the cookie has a non-zero expires that is already past
+            for c in li_at_cookies:
+                expires = c.get("expires", -1)
+                if expires > 0 and expires < now:
+                    logger.warning("li_at cookie has expired (expires={:.0f})", expires)
+                    return False
+        except Exception as exc:
+            logger.warning("Cookie pre-check failed: {}", exc)
+            # Fall through to browser verification
+
         logger.info("Cookies file found — verifying session validity")
         page = await context.new_page()
         try:
-            await page.goto(f"{LINKEDIN_BASE_URL}/feed", wait_until="domcontentloaded", timeout=15000)
+            await page.goto(f"{LINKEDIN_BASE_URL}/feed", wait_until="domcontentloaded", timeout=30000)
             await random_delay()
 
             current_url = page.url

@@ -32,15 +32,28 @@ async def capture_profile_sections(page: Page, profile_url: str) -> list[str]:
 
     # CRITICAL FIX for Playwright Timeout (waiting for fonts to load)
     # Playwright's screenshot engine unconditionally awaits `document.fonts.ready`
-    # and hangs if LinkedIn's anti-bot/tracking blocks font loading. 
-    # We mock it to instantly resolve.
+    # and hangs if LinkedIn's anti-bot/tracking blocks font loading.
+    # add_init_script covers future navigations; the evaluate() below patches the
+    # already-live page context immediately after goto().
     await page.add_init_script("""
         Object.defineProperty(document.fonts, 'ready', {
             get: () => Promise.resolve([])
         });
     """)
 
-    await page.goto(profile_url, wait_until="domcontentloaded")
+    await page.goto(profile_url, wait_until="domcontentloaded", timeout=60000)
+
+    # Patch font readiness on the currently loaded page so screenshots don't block
+    await page.evaluate("""
+        () => {
+            try {
+                Object.defineProperty(document.fonts, 'ready', {
+                    get: () => Promise.resolve([]),
+                    configurable: true
+                });
+            } catch(e) {}
+        }
+    """)
 
     # Wait for profile content to render
     try:
@@ -61,7 +74,7 @@ async def capture_profile_sections(page: Page, profile_url: str) -> list[str]:
         await page.wait_for_timeout(1800)  # Let lazy-loaded content settle
 
         file_path = str(screenshot_dir / f"{profile_slug}_{name}.png")
-        await page.screenshot(path=file_path, full_page=False)
+        await page.screenshot(path=file_path, full_page=False, timeout=60000)
         screenshot_paths.append(file_path)
         logger.info("Screenshot saved: {}", file_path)
 

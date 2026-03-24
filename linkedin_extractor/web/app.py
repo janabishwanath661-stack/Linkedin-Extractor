@@ -184,7 +184,19 @@ async def _run_pipeline(job_id: str, query: str):
         # ── Browser Launch ─────────────────────────────────────────────
         progress("Launching browser...", "browser")
         pw = await async_playwright().start()
-        browser = await pw.chromium.launch(headless=config.HEADLESS)
+        browser = await pw.chromium.launch(
+            headless=config.HEADLESS,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--window-size=1280,900",
+                "--disable-web-security",
+                "--disable-features=IsolateOrigins,site-per-process",
+            ],
+        )
 
         # Session handling
         cookies_path = Path(config.COOKIES_PATH)
