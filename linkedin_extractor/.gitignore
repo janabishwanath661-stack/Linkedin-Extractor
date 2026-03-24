@@ -1,0 +1,12 @@
+.env
+screenshots/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+*.db-journal
+auth/cookies.json
+results/
+*.log
+.venv/
+venv/

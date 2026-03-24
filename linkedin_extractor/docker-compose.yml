@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  # ── LinkedIn Extractor CLI ─────────────────────────────────────────────────
+  extractor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: linkedin-extractor
+    env_file:
+      - .env
+    environment:
+      # Override model / device via env if needed
+      - HF_MODEL_NAME=${HF_MODEL_NAME:-Qwen/Qwen2.5-7B-Instruct}
+      - HF_DEVICE=${HF_DEVICE:-auto}
+      - HF_MAX_NEW_TOKENS=${HF_MAX_NEW_TOKENS:-2048}
+    volumes:
+      # Persist results, DB, cookies, and screenshots on the host
+      - ./results:/app/results
+      - ./storage:/app/storage
+      - ./auth:/app/auth
+      - ./screenshots:/app/screenshots
+      # Cache HF model weights on the host so they survive rebuilds
+      - hf_cache:/root/.cache/huggingface
+    # Override CMD with your desired arguments, e.g.:
+    #   docker compose run extractor --name "Elon Musk" --export json
+    entrypoint: ["python", "main.py"]
+
+    # Uncomment below to enable GPU access (requires nvidia-container-toolkit)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  hf_cache:

@@ -1,0 +1,14 @@
+.env
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+screenshots/
+results/
+*.db
+*.db-journal
+*.log
+.venv/
+venv/
+auth/cookies.json
