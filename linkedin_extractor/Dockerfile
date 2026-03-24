@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     libatspi2.0-0 \
     libxshmfence1 \
+    libxfixes3 \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
@@ -36,8 +37,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright Chromium binary
-RUN playwright install chromium
+# Install Playwright Chromium browser + ALL its OS-level deps
+RUN playwright install --with-deps chromium
 
 # ── Copy application code ───────────────────────────────────────────────────────
 COPY . .
