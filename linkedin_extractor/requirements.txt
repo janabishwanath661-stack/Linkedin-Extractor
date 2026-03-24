@@ -1,6 +1,6 @@
 playwright==1.44.0
 paddleocr==2.7.3
-paddlepaddle==2.6.1
+paddlepaddle==2.6.2
 transformers>=4.40.0
 torch>=2.2.0
 accelerate>=0.29.0
