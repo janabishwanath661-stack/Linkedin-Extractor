@@ -6,7 +6,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # System dependencies for Playwright (Chromium) and PaddleOCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Playwright / Chromium runtime deps
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -23,11 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     libatspi2.0-0 \
     libxshmfence1 \
-    # PaddleOCR image deps
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
-    # Utilities
     wget \
     fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
@@ -48,9 +45,11 @@ COPY . .
 # Create required directories
 RUN mkdir -p screenshots results storage auth
 
-# ── Volumes for model cache and outputs ──────────────────────────────────────────
-# HF models cached in /root/.cache/huggingface by default
+# HF model cache volume
 VOLUME ["/root/.cache/huggingface"]
 
-ENTRYPOINT ["python", "main.py"]
-CMD ["--help"]
+# Expose web UI port
+EXPOSE 8000
+
+# Default: start the web UI server
+CMD ["uvicorn", "web.app:app", "--host", "0.0.0.0", "--port", "8000"]

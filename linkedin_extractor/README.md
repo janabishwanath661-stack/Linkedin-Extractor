@@ -1,116 +1,98 @@
 # LinkedIn Profile Extractor
 
-A Python CLI tool that automates LinkedIn profile extraction using Playwright (async browser automation), PaddleOCR (optical character recognition), and a local Hugging Face LLM to produce validated structured JSON profiles.
-
-## Prerequisites
-
-- **Docker** & **Docker Compose** (recommended), OR
-- Python 3.11+ installed locally
-- ~16 GB RAM (for loading the 7B model) or a CUDA GPU
+Extract structured LinkedIn profile data using Playwright browser automation, PaddleOCR, and a local Hugging Face LLM. Comes with both a **CLI** and a **Web UI**.
 
 ---
 
-## Option A — Docker (Recommended)
-
-### 1. Configure credentials
+## Quick Start (Docker)
 
 ```bash
-cp .env.example .env
-# Edit .env with your LinkedIn email and password
-```
-
-### 2. Build & run
-
-```bash
+cp .env.example .env          # fill in your LinkedIn credentials
 docker compose build
-docker compose run extractor --name "Elon Musk" --export json
+docker compose up              # web UI at http://localhost:8000
 ```
 
-The first run will download the Qwen2.5-7B-Instruct model (~14 GB). Weights are cached in a Docker volume so subsequent runs start fast.
+The first run downloads the Qwen2.5-7B-Instruct model (~14 GB). Weights are cached in a Docker volume.
 
-#### GPU support (optional)
+### GPU Support
 
-Uncomment the `deploy` block in `docker-compose.yml` and ensure `nvidia-container-toolkit` is installed.
+Uncomment the `deploy` block in `docker-compose.yml` and install `nvidia-container-toolkit`.
 
-#### Use a different model
-
-```bash
-HF_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.3 docker compose run extractor --name "Elon Musk"
-```
-
-### 3. Stop
+### Use a Different Model
 
 ```bash
-docker compose down
+HF_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.3 docker compose up
 ```
 
 ---
 
-## Option B — Local Installation
+## Web UI
 
-```bash
-pip install -r requirements.txt
-playwright install chromium
-```
+Open **http://localhost:8000** after starting the container. The UI lets you:
 
-```bash
-cp .env.example .env
-# Edit .env
-```
-
-```bash
-python main.py --name "Elon Musk" --export json
-```
+1. Enter a **name** or **LinkedIn profile URL**
+2. Watch **real-time progress** (login → search → screenshot → OCR → LLM → validate)
+3. View results in three tabs:
+   - **Profile** — structured card with experience, education, skills, etc.
+   - **Screenshots** — gallery with lightbox zoom
+   - **Raw JSON** — copyable JSON output
 
 ---
 
-## CLI Arguments
+## CLI Usage
 
-| Argument        | Required | Default      | Description                          |
-|-----------------|----------|--------------|--------------------------------------|
-| `--name`        | Yes      | —            | Full name of the person to search    |
-| `--email`       | No       | from .env    | Override LinkedIn email              |
-| `--password`    | No       | from .env    | Override LinkedIn password           |
-| `--export`      | No       | `json`       | Export format: `json`, `csv`, `both` |
-| `--output`      | No       | `./results/` | Output directory for exports         |
-| `--headless`    | No       | `true`       | Run browser headless (`true`/`false`)|
-| `--fresh-login` | No       | `false`      | Ignore saved cookies, force login    |
+```bash
+# Inside the container:
+docker compose run extractor python main.py --name "Elon Musk" --export json
+
+# Or locally (Python 3.11+):
+python main.py --name "Elon Musk" --export both --output ./results/
+```
+
+| Argument        | Default      | Description                          |
+|-----------------|--------------|--------------------------------------|
+| `--name`        | required     | Person to search                     |
+| `--email`       | from .env    | Override LinkedIn email              |
+| `--password`    | from .env    | Override LinkedIn password           |
+| `--export`      | `json`       | `json`, `csv`, or `both`            |
+| `--output`      | `./results/` | Output directory                     |
+| `--headless`    | `true`       | `true` or `false`                   |
+| `--fresh-login` | off          | Force new login                      |
+
+---
 
 ## Environment Variables
 
-| Variable            | Default                       | Description                       |
-|---------------------|-------------------------------|-----------------------------------|
-| `HF_MODEL_NAME`     | `Qwen/Qwen2.5-7B-Instruct`   | Hugging Face model ID             |
-| `HF_DEVICE`         | `auto`                        | `auto`, `cpu`, or `cuda`          |
-| `HF_MAX_NEW_TOKENS` | `2048`                        | Max generation length             |
+| Variable            | Default                       | Description              |
+|---------------------|-------------------------------|--------------------------|
+| `LINKEDIN_EMAIL`    | —                             | LinkedIn login email     |
+| `LINKEDIN_PASSWORD` | —                             | LinkedIn login password  |
+| `HF_MODEL_NAME`     | `Qwen/Qwen2.5-7B-Instruct`   | Hugging Face model ID   |
+| `HF_DEVICE`         | `auto`                        | `auto`, `cpu`, `cuda`   |
+| `HF_MAX_NEW_TOKENS` | `2048`                        | Max generation length   |
+
+---
 
 ## Project Structure
 
 ```
 linkedin_extractor/
-├── main.py                   # CLI entry point
-├── config.py                 # All constants
-├── Dockerfile                # Python 3.11 container
-├── docker-compose.yml        # Extractor service
-├── auth/
-│   └── session_manager.py    # Login + cookie persistence
-├── navigation/
-│   └── profile_navigator.py  # Search + find profile URL
-├── capture/
-│   └── screenshot_engine.py  # Sectional screenshot capture
-├── ocr/
-│   └── ocr_engine.py         # PaddleOCR wrapper
-├── preprocessing/
-│   └── text_cleaner.py       # OCR text cleanup
-├── extraction/
-│   └── llm_extractor.py      # HuggingFace LLM extraction
-├── validation/
-│   └── schema.py             # Pydantic models
-├── storage/
-│   └── db_handler.py         # SQLite + JSON/CSV export
-├── utils/
-│   ├── exceptions.py         # Custom exceptions
-│   ├── rate_limiter.py       # Async delay helpers
-│   └── logger.py             # Loguru setup
-└── screenshots/              # Temp folder (gitignored)
+├── main.py                     # CLI entry point
+├── config.py                   # Constants
+├── Dockerfile / docker-compose.yml
+├── web/
+│   ├── app.py                  # FastAPI backend + extraction API
+│   └── static/
+│       ├── index.html          # Web UI
+│       ├── style.css           # Dark-mode design
+│       └── app.js              # Frontend logic
+├── auth/session_manager.py
+├── navigation/profile_navigator.py
+├── capture/screenshot_engine.py
+├── ocr/ocr_engine.py
+├── preprocessing/text_cleaner.py
+├── extraction/llm_extractor.py
+├── validation/schema.py
+├── storage/db_handler.py
+└── utils/ (exceptions, logger, rate_limiter)
 ```

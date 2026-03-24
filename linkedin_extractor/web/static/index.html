@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkedIn Profile Extractor</title>
+  <meta name="description" content="Extract structured LinkedIn profile data using AI-powered OCR and LLM analysis" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── Header ───────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header__logo">
+      <div class="header__icon">🔍</div>
+      <h1 class="header__title">LinkedIn Extractor</h1>
+    </div>
+    <p class="header__subtitle">
+      Enter a name or LinkedIn profile URL to extract structured data with AI-powered OCR &amp; LLM analysis.
+    </p>
+  </header>
+
+  <div class="container">
+
+    <!-- ── Search Card ──────────────────────────────────────────── -->
+    <div class="search-card" id="searchCard">
+      <form class="search__form" id="searchForm">
+        <input
+          type="text"
+          class="search__input"
+          id="searchInput"
+          placeholder="Enter a name (e.g. Elon Musk) or LinkedIn URL..."
+          autocomplete="off"
+          required
+        />
+        <button type="submit" class="search__btn" id="searchBtn">
+          Extract Profile
+        </button>
+      </form>
+    </div>
+
+    <!-- ── Error Banner ─────────────────────────────────────────── -->
+    <div class="error-banner" id="errorBanner">
+      <span>⚠️</span>
+      <span id="errorMessage"></span>
+    </div>
+
+    <!-- ── Progress Panel ───────────────────────────────────────── -->
+    <div class="progress-panel" id="progressPanel">
+      <div class="progress__title">
+        <span class="spinner" id="progressSpinner"></span>
+        <span id="progressTitle">Extraction in progress...</span>
+      </div>
+      <ul class="progress__list" id="progressList"></ul>
+    </div>
+
+    <!-- ── Results ──────────────────────────────────────────────── -->
+    <section class="results" id="resultsSection">
+
+      <!-- Tabs -->
+      <div class="results__tabs" id="resultTabs">
+        <button class="results__tab active" data-tab="profile">Profile</button>
+        <button class="results__tab" data-tab="screenshots">Screenshots</button>
+        <button class="results__tab" data-tab="json">Raw JSON</button>
+      </div>
+
+      <!-- Profile Tab -->
+      <div class="results__panel active" id="tab-profile">
+        <div class="profile-card" id="profileCard">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+      <!-- Screenshots Tab -->
+      <div class="results__panel" id="tab-screenshots">
+        <div class="gallery" id="screenshotGallery">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+      <!-- JSON Tab -->
+      <div class="results__panel" id="tab-json">
+        <div class="json-panel">
+          <button class="json-panel__copy" id="copyJsonBtn">Copy</button>
+          <pre id="jsonOutput"></pre>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- ── Lightbox ─────────────────────────────────────────────── -->
+  <div class="lightbox" id="lightbox">
+    <img id="lightboxImg" src="" alt="Screenshot preview" />
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
