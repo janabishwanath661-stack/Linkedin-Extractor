@@ -1,5 +1,5 @@
-# ── Base image: Python 3.11 ─────────────────────────────────────────────────────
-FROM python:3.11-slim
+# ── Base image: Python 3.11 on Debian Bookworm (officially supported by Playwright)
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
